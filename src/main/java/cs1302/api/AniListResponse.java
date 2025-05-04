@@ -10,6 +10,12 @@ public class AniListResponse {
     public static class Media {
         public Title title;
         public int averageScore;
+        public CoverImage coverImage;
+    }
+    
+    public static class CoverImage {
+        public String large;
+        
     }
 
     public static class Title {
