@@ -41,19 +41,21 @@ public class ApiApp extends Application {
 
       Label imageUrlLabel = new Label("Image URL:");
       TextField imageUrlField = new TextField("https://..."); // placeholder URL
-      Button loadImageButton = new Button("Load Image");
+      
 
       Label thresholdLabel = new Label("Minimum Score:");
       TextField thresholdField = new TextField("7.5");
       HBox thresholdBox = new HBox(10, thresholdLabel, thresholdField);
 
-      HBox imageInputBox = new HBox(10, imageUrlLabel, imageUrlField, loadImageButton);
+      HBox imageInputBox = new HBox(10, imageUrlLabel, imageUrlField);
 
       ImageView selectedImageView = new ImageView();
       selectedImageView.setFitWidth(300);
       selectedImageView.setPreserveRatio(true);
 
-     
+      ImageView coverImageView = new ImageView();
+      coverImageView.setFitWidth(200);
+      coverImageView.setPreserveRatio(true);
       
       Label animeTitleLabel = new Label("Anime Title: ");
       Label scoreLabel = new Label("Score: ");
@@ -65,29 +67,29 @@ public class ApiApp extends Application {
         try {
             String imageUrl = imageUrlField.getText().trim();
             double threshold = Double.parseDouble(thresholdField.getText().trim());
-            traceMoe(imageUrl, animeTitleLabel, scoreLabel, verdictLabel, threshold);
-            } catch (Exception invalidInput) {
+
+            new Thread(() -> {
+              try {
+                Image img = new Image(imageUrl, true);
+                  Platform.runLater(() -> selectedImageView.setImage(img));
+              } catch (Exception imgFail) {
+                System.out.println("Failed to load image: " + imgFail.getMessage());
+              }
+            }).start();
+            
+              traceMoe(imageUrl, animeTitleLabel, scoreLabel, verdictLabel, threshold, coverImageView);
+                
+                } catch (Exception invalidInput) {
               System.out.println("Invalid Image URL: " + invalidInput.getMessage());
              }//try-catch
-            
             });
        
-
-      loadImageButton.setOnAction(e -> {
-          try {
-              String imageUrl = imageUrlField.getText().trim();
-              Image img = new Image(imageUrl, true);
-              selectedImageView.setImage(img);
-          } catch (Exception ex) {
-              System.out.println("Failed to load image: " + ex.getMessage());
-          }
-      });
-
       root.setSpacing(10);
       root.getChildren().addAll(
           
           imageInputBox,
           selectedImageView,
+          coverImageView,
           thresholdBox,
           submitButton,
           resultBox
@@ -101,11 +103,12 @@ public class ApiApp extends Application {
       stage.show();
     } //start
 
-    public void aniList(int anilistId, Label titleLabel, Label scoreLabel, Label verdictLabel, double threshold) {
+    public void aniList(int anilistId, Label titleLabel, Label scoreLabel, Label verdictLabel, double threshold, ImageView coverImageView) {
     new Thread(() -> {
         try {
-            String query = "{ \"query\": \"query ($id: Int) { Media(id: $id, type: ANIME) { title { romaji english native } averageScore } }\", " +
-                           "\"variables\": { \"id\": " + anilistId + " } }";
+            String query = "{ \"query\": \"query ($id: Int) { Media(id: $id, type: ANIME) { title { romaji english native } averageScore coverImage {                                 large } } }\", " +
+                          "\"variables\": { \"id\": " + anilistId + " } }";
+
 
             java.net.URL url = new java.net.URL("https://graphql.anilist.co");
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
@@ -129,15 +132,19 @@ public class ApiApp extends Application {
             AniListResponse data = gson.fromJson(response.toString(), AniListResponse.class);
             String title = data.data.Media.title.english != null ? data.data.Media.title.english : data.data.Media.title.romaji;
             double score = data.data.Media.averageScore / 10.0;
+            
+            String coverUrl = data.data.Media.coverImage.large;
+
 
             Platform.runLater(() -> {
                 titleLabel.setText("Anime Title: " + title);
                 scoreLabel.setText("Score: " + score);
                 if (score >= threshold) {
-                    verdictLabel.setText("Verdict: ? Kino");
+                    verdictLabel.setText("Verdict: Kino!!");
                 } else {
-                    verdictLabel.setText("Verdict: ? Slop");
+                    verdictLabel.setText("Verdict: Slop :(");
                 }
+                coverImageView.setImage(new Image(coverUrl, true));
             });
 
         } catch (Exception eee) {
@@ -147,7 +154,7 @@ public class ApiApp extends Application {
 }
 
     
-    public void traceMoe(String imageUrl, Label animeTitleLabel, Label scoreLabel, Label verdictLabel, double threshold) {
+    public void traceMoe(String imageUrl, Label animeTitleLabel, Label scoreLabel, Label verdictLabel, double threshold, ImageView coverImageView) {
       new Thread(() -> {
           try {
               String apiUrl = "https://api.trace.moe/search?url=" + java.net.URLEncoder.encode(imageUrl, "UTF-8");
@@ -170,7 +177,7 @@ public class ApiApp extends Application {
             
               int anilistId = topResult.anilist;
 
-              aniList(anilistId, animeTitleLabel, scoreLabel, verdictLabel, threshold);
+              aniList(anilistId, animeTitleLabel, scoreLabel, verdictLabel, threshold, coverImageView);
             
           } catch (Exception e) {
               e.printStackTrace();
