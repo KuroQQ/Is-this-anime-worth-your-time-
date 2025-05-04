@@ -1,6 +1,6 @@
 package cs1302.api;
 
-public static class AniListResponse {
+public class AniListResponse {
     public Data data;
 
     public static class Data {
