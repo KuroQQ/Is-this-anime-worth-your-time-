@@ -17,31 +17,11 @@ public class AniListResponse {
     } //Data
 
     /**
-     * Represents the `Media` object in the AniList response.
+     * Represents the malID from anilist which we'll use for our RESTful Jikan response.
      */
     public static class Media {
-        public Title title;
-        public int averageScore;
-        public CoverImage coverImage;
-    } //Media
-
-    /**
-     * Represents the cover image URLs in the Media object.
-     */
-    public static class CoverImage {
-        public String large;
-    } //coverImage
-
-    /**
-     * Represents the various title formats for an anime.
-     */
-    public static class Title {
-        public String romaji;
-        public String english;
-
-        @SerializedName("native")
-        public String nativeTitle;
-    } //title
+        public int idMal;
+    }
 } //AniListResponse
 
 
