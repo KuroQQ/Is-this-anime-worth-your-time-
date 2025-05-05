@@ -16,6 +16,10 @@ import javafx.scene.layout.HBox;
 import com.google.gson.Gson;
 import cs1302.api.TraceMoeResponse;
 import cs1302.api.AniListResponse;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
 /**
  * This app that checks if an anime screenshot is from a show that's worth your time.
@@ -102,56 +106,57 @@ public class ApiApp extends Application {
     } //start
 
     /**
-     * Uses AniList GraphQL API to get anime metadata.
-     * @param anilistId       the AniList ID of the anime
+     * Uses JikanAPI to get anime metadata.
+     * @param anilistId       the MalID of the anime
      * @param titleLabel      label to display the anime title
      * @param scoreLabel      label to display the average score from aniList
      * @param verdictLabel    label to display the verdict ("Kino" or "Slop")
      * @param threshold       minimum score threshold for "Kino" or an anime worth your time
      * @param coverImageView  image view to display the official anime cover image
      */
-    public void aniList(int anilistId, Label titleLabel, Label scoreLabel,
-                        Label verdictLabel, double threshold, ImageView coverImageView) {
+    public void jikanData(int anilistId, Label titleLabel, Label scoreLabel,
+                          Label verdictLabel, double threshold, ImageView coverImageView) {
 
         new Thread(() -> {
             try {
-                String query =
-                    "{ \"query\": \"query ($id: Int) { Media(id: $id, type: ANIME) " +
-                    "{ title { romaji english native } averageScore coverImage { large } } }\", " +
-                    "\"variables\": { \"id\": " + anilistId + " } }";
-
-                java.net.URL url = new java.net.URL("https://graphql.anilist.co");
-                java.net.HttpURLConnection conn =
-                    (java.net.HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setDoOutput(true);
-
-                java.io.OutputStream os = conn.getOutputStream();
-                byte[] input = query.getBytes("utf-8");
-                os.write(input, 0, input.length);
-
-                java.io.BufferedReader in =
-                    new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(),
-                        "utf-8"));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = in.readLine()) != null) {
-                    response.append(line.trim());
-                }
-                in.close();
-
+                HttpClient client = HttpClient.newHttpClient();
                 Gson gson = new Gson();
-                AniListResponse data = gson.fromJson(response.toString(), AniListResponse.class);
-                String title = data.data.media.title.english != null
-                    ? data.data.media.title.english
-                    : data.data.media.title.romaji;
-                double score = data.data.media.averageScore / 10.0;
-                String coverUrl = data.data.media.coverImage.large;
 
-                updateVerdictUi(title, score, threshold, titleLabel, scoreLabel,
-                    verdictLabel, coverImageView, coverUrl);
+                String query = "{ \"query\": \"query ($id: Int) { Media(id: $id) {idMal} }\"," +
+                               "\"variables\" : {\"id\": " + anilistId + " } }";
 
+                HttpRequest aniListRequest = HttpRequest.newBuilder()
+                    .uri(URI.create("https://graphql.anilist.co"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(query))
+                    .build(); //making our HTTP request
+
+                HttpResponse<String> aniListResponse = client.send(aniListRequest, 
+                                                      HttpResponse.BodyHandlers.ofString());
+                AniListResponse aniListData = gson.fromJson(aniListResponse.body(), 
+                                              AniListResponse.class);
+                int malId = aniListData.data.media.idMal;
+
+                HttpRequest jikanRequest = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.jikan.moe/v4/anime/" + malId))
+                    .GET()
+                    .build(); // this is our request to Jikan. A normal RESTful Api
+
+                HttpResponse<String> jikanResponse = client.send(jikanRequest, 
+                                      HttpResponse.BodyHandlers.ofString());
+                JikanResponse jikanData = gson.fromJson(jikanResponse.body(), JikanResponse.class);
+
+                Platform.runLater(() -> { //UI update
+                    titleLabel.setText("Anime Title: " + jikanData.data.title);
+                    scoreLabel.setText("Score: " + jikanData.data.score);
+                    if (jikanData.data.score >= threshold) {
+                        verdictLabel.setText("Verdict: Senpai, It's Kino!!");
+                    } else {
+                        verdictLabel.setText("Verdict: Ehh?! It's Slop Senpai");
+                    } //if-else
+
+                    coverImageView.setImage(new Image(jikanData.data.images.jpg.imageUrl, true));
+                });
             } catch (Exception eee) {
                 Platform.runLater(() -> {
                     Alert alert = new Alert(AlertType.ERROR);
@@ -205,7 +210,7 @@ public class ApiApp extends Application {
 
                 int anilistId = topResult.anilist;
 
-                aniList(anilistId, animeTitleLabel, scoreLabel,
+                jikanData(anilistId, animeTitleLabel, scoreLabel,
                     verdictLabel, threshold, coverImageView);
 
             } catch (Exception e) {
@@ -213,7 +218,8 @@ public class ApiApp extends Application {
                     Alert alert = new Alert(AlertType.ERROR);
                     alert.setTitle("TraceMoe Error");
                     alert.setHeaderText("Nyaa~ TraceMoe had trouble!");
-                    alert.setContentText("Ehh!? I couldn't identify the anime... " +
+                    alert.setContentText("Ehh!? I couldn't identify the anime." 
+                        + "Send a proper link b-baka! " +
                         e.getMessage());
                     alert.showAndWait();
                 });
@@ -277,3 +283,4 @@ public class ApiApp extends Application {
     }
 
 } // ApiApp
+
